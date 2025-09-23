@@ -22,8 +22,11 @@ function(target_link_compressonator TARGET)
         endif()
     elseif(APPLE)
         target_link_libraries(${TARGET} PRIVATE
-                "${COMPRESSONATOR_DIR}/lib/osx_universal2/libCompressonator$<$<CONFIG:Debug>:d>.a"
-                "${COMPRESSONATOR_DIR}/lib/osx_universal2/libCMP_Core$<$<CONFIG:Debug>:d>.a")
+                "${COMPRESSONATOR_DIR}/lib/macos_arm64/libCompressonator$<$<CONFIG:Debug>:d>.a"
+                "${COMPRESSONATOR_DIR}/lib/macos_arm64/libCMP_Core$<$<CONFIG:Debug>:d>.a"
+                "${COMPRESSONATOR_DIR}/lib/macos_arm64/libCMP_Core_AVX$<$<CONFIG:Debug>:d>.a"
+                "${COMPRESSONATOR_DIR}/lib/macos_arm64/libCMP_Core_AVX512$<$<CONFIG:Debug>:d>.a"
+                "${COMPRESSONATOR_DIR}/lib/macos_arm64/libCMP_Core_SSE$<$<CONFIG:Debug>:d>.a")
     elseif(UNIX)
         target_link_libraries(${TARGET} PRIVATE
                 "${COMPRESSONATOR_DIR}/lib/linux_x86_64/libCompressonator$<$<CONFIG:Debug>:d>.a"
