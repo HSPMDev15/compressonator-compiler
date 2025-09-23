@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.10)
 
+# Check architecture
+include(CheckCXXSourceCompiles)
+check_cxx_source_compiles("
+#if defined(__aarch64__) || defined(_M_ARM64)
+int main() { return 0; }
+#else
+#error not arm64
+#endif
+" CMP_IS_ARM64)
+
 function(create_cmp_core_library SUFFIX)
     add_library(CMP_Core${SUFFIX} STATIC)
 
@@ -47,68 +57,70 @@ function(create_cmp_core_library SUFFIX)
 
     set_target_properties(CMP_Core${SUFFIX} PROPERTIES FOLDER ${PROJECT_FOLDER_SDK_LIBS})
 
-    # Core SIMD options
-    option(CMP_APPLE_HACK "Disable CPU-dependent specialized libraries" OFF)
-    if(APPLE OR CMP_APPLE_HACK)
-        # hack to avoid missing functions at link time
-        target_sources(CMP_Core${SUFFIX}
-                PRIVATE
-                source/core_simd_apple.cpp)
+    # SSE
+    add_library(CMP_Core${SUFFIX}_SSE STATIC)
+    target_sources(CMP_Core${SUFFIX}_SSE PRIVATE source/core_simd_sse.cpp)
+    target_include_directories(CMP_Core${SUFFIX}_SSE PRIVATE source shaders)
+
+    if (CMP_IS_ARM64)
+        target_compile_definitions(CMP_Core_SSE PRIVATE CMP_ARM64_BUILD)
     else()
-
-        # SSE
-        add_library(CMP_Core${SUFFIX}_SSE STATIC)
-        target_sources(CMP_Core${SUFFIX}_SSE PRIVATE source/core_simd_sse.cpp)
-        target_include_directories(CMP_Core${SUFFIX}_SSE PRIVATE source shaders)
-
-        if (UNIX)
-            target_compile_options(CMP_Core${SUFFIX}_SSE PRIVATE -march=nehalem)
-        endif()
-
-        set_target_properties(CMP_Core${SUFFIX}_SSE PROPERTIES FOLDER ${PROJECT_FOLDER_SDK_LIBS})
-
-        # AVX
-        add_library(CMP_Core${SUFFIX}_AVX STATIC)
-        target_sources(CMP_Core${SUFFIX}_AVX PRIVATE source/core_simd_avx.cpp)
-        target_include_directories(CMP_Core${SUFFIX}_AVX PRIVATE source shaders)
-
-        if (WIN32)
-            target_compile_options(CMP_Core${SUFFIX}_AVX PRIVATE /arch:AVX2)
-        else()
-            target_compile_options(CMP_Core${SUFFIX}_AVX PRIVATE -march=haswell)
-        endif()
-
-        set_target_properties(CMP_Core${SUFFIX}_AVX PROPERTIES FOLDER ${PROJECT_FOLDER_SDK_LIBS})
-
-        # AVX-512
-        add_library(CMP_Core${SUFFIX}_AVX512 STATIC)
-        target_sources(CMP_Core${SUFFIX}_AVX512 PRIVATE source/core_simd_avx512.cpp)
-        target_include_directories(CMP_Core${SUFFIX}_AVX512 PRIVATE source shaders)
-
-        if (WIN32)
-            target_compile_options(CMP_Core${SUFFIX}_AVX512 PRIVATE /arch:AVX-512)
-        else()
-            target_compile_options(CMP_Core${SUFFIX}_AVX512 PRIVATE -march=knl)
-        endif()
-
-        set_target_properties(CMP_Core${SUFFIX}_AVX512 PROPERTIES FOLDER ${PROJECT_FOLDER_SDK_LIBS})
-
-        # Link SIMD libraries to CMP_Core${SUFFIX}
-        target_link_libraries(CMP_Core${SUFFIX} PRIVATE CMP_Core${SUFFIX}_SSE CMP_Core${SUFFIX}_AVX CMP_Core${SUFFIX}_AVX512)
-
+        target_compile_options(CMP_Core_SSE PRIVATE -march=nehalem)
     endif()
+
+    set_target_properties(CMP_Core${SUFFIX}_SSE PROPERTIES FOLDER ${PROJECT_FOLDER_SDK_LIBS})
+
+    # AVX
+    add_library(CMP_Core${SUFFIX}_AVX STATIC)
+    target_sources(CMP_Core${SUFFIX}_AVX PRIVATE source/core_simd_avx.cpp)
+    target_include_directories(CMP_Core${SUFFIX}_AVX PRIVATE source shaders)
+
+    if (WIN32)
+        if (CMP_IS_ARM64)
+            target_compile_definitions(CMP_Core_AVX PRIVATE CMP_ARM64_BUILD)
+        else()
+            target_compile_options(CMP_Core_AVX PRIVATE /arch:AVX2)
+        endif()
+    else()
+        if (CMP_IS_ARM64)
+            target_compile_definitions(CMP_Core_AVX PRIVATE CMP_ARM64_BUILD)
+        else()
+            target_compile_options(CMP_Core_AVX PRIVATE -march=haswell)
+        endif()
+    endif()
+
+    set_target_properties(CMP_Core${SUFFIX}_AVX PROPERTIES FOLDER ${PROJECT_FOLDER_SDK_LIBS})
+
+    # AVX-512
+    add_library(CMP_Core${SUFFIX}_AVX512 STATIC)
+    target_sources(CMP_Core${SUFFIX}_AVX512 PRIVATE source/core_simd_avx512.cpp)
+    target_include_directories(CMP_Core${SUFFIX}_AVX512 PRIVATE source shaders)
+
+    if (WIN32)
+        if (CMP_IS_ARM64)
+            target_compile_definitions(CMP_Core_AVX512 PRIVATE CMP_ARM64_BUILD)
+        else()
+            target_compile_options(CMP_Core_AVX512 PRIVATE /arch:AVX-512)
+        endif()
+    else()
+        if (CMP_IS_ARM64)
+            target_compile_definitions(CMP_Core_AVX512 PRIVATE CMP_ARM64_BUILD)
+        else()
+            target_compile_options(CMP_Core_AVX512 PRIVATE -march=knl)
+        endif()
+    endif()
+
+    set_target_properties(CMP_Core${SUFFIX}_AVX512 PROPERTIES FOLDER ${PROJECT_FOLDER_SDK_LIBS})
+
+    # Link SIMD libraries to CMP_Core${SUFFIX}
+    target_link_libraries(CMP_Core${SUFFIX} PRIVATE CMP_Core${SUFFIX}_SSE CMP_Core${SUFFIX}_AVX CMP_Core${SUFFIX}_AVX512)
 endfunction()
 
 if(NOT WIN32)
     create_cmp_core_library("")
 else()
     create_cmp_core_library("_MD")
+    set_property(TARGET "CMP_Core_MD" PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     create_cmp_core_library("_MT")
-    if(CMAKE_BUILD_TYPE MATCHES "Debug")
-        set_property(TARGET "CMP_Core_MD" PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreadedDebugDLL")
-        set_property(TARGET "CMP_Core_MT" PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreadedDebug")
-    else()
-        set_property(TARGET "CMP_Core_MD" PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
-        set_property(TARGET "CMP_Core_MT" PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
-    endif()
+    set_property(TARGET "CMP_Core_MT" PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
