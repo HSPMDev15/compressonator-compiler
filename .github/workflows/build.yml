@@ -14,7 +14,7 @@ jobs:
       matrix:
         os:
           - { id: windows-latest, name: Windows }
-          - { id: ubuntu-latest, name: Linux }
+          - { id: ubuntu-22.04, name: Linux }
           - { id: macos-latest, name: macOS }
         build_type: [Debug, Release]
     runs-on: ${{matrix.os.id}}
@@ -40,7 +40,7 @@ jobs:
           Copy-Item -Path patches/CMakeLists.txt                       -Destination compressonator/CMakeLists.txt
 
       - name: Patch Compressonator [Linux / macOS]
-        if: matrix.os.id == 'ubuntu-latest' || matrix.os.id == 'macos-latest'
+        if: matrix.os.id == 'ubuntu-22.04' || matrix.os.id == 'macos-latest'
         run: |
           cp patches/cmp_compressonatorlib/CMakeLists.txt compressonator/cmp_compressonatorlib/CMakeLists.txt
           cp patches/cmp_core/CMakeLists.txt              compressonator/cmp_core/CMakeLists.txt
@@ -55,7 +55,7 @@ jobs:
           spectre: true
 
       - name: Install Dependencies [Linux]
-        if: matrix.os.id == 'ubuntu-latest'
+        if: matrix.os.id == 'ubuntu-22.04'
         run: |
           sudo apt update && sudo apt install -y ninja-build
 
@@ -85,7 +85,7 @@ jobs:
   merge:
     needs:
       - build-regular
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
